@@ -5,25 +5,14 @@ const APP_KEY = 'fokusMasaDepanDB';
 
 // --- Fungsi Helper (Utility) ---
 
-/**
- * Mengubah objek Date atau string tanggal menjadi format YYYY-MM-DD (ISO Date String).
- * @param {Date | string} date - Objek Date atau string yang valid.
- * @returns {string} Tanggal dalam format YYYY-MM-DD.
- */
+// #PERBAIKAN 1: Fungsi Tanggal yang Lebih Robust
 function getISODate(date) {
-    if (typeof date === 'string') {
-        // Coba konversi string menjadi objek Date
-        const dateObject = new Date(date + 'T00:00:00'); 
-        if (!isNaN(dateObject)) {
-            date = dateObject;
-        } else {
-            date = new Date(); // Fallback jika string tidak valid
-        }
-    } else if (!(date instanceof Date) || isNaN(date)) {
+    // Mengembalikan format YYYY-MM-DD
+    // Pastikan date adalah objek Date yang valid
+    if (!(date instanceof Date) || isNaN(date)) {
         date = new Date();
     }
-    
-    // Menggunakan UTC methods untuk menghindari masalah timezone lokal
+    // Menggunakan Intl.DateTimeFormat (Modern & Lebih Aman)
     const year = date.getFullYear();
     const month = ('0' + (date.getMonth() + 1)).slice(-2);
     const day = ('0' + date.getDate()).slice(-2);
@@ -40,7 +29,7 @@ function getDefaultDB() {
             targetDate: getISODate(new Date())
         },
         settings: {
-            limitBulanan: 0, 
+            limitBulanan: 0, // Diubah menjadi 0
             motivasi: {
                 kuning: 'Hati-hati, pengeluaranmu banyak!',
                 merah: 'STOP! Kamu sudah boros!'
@@ -86,49 +75,27 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // --- Manajemen Database (localStorage) ---
 
-/**
- * Memuat data dari localStorage. Melakukan migrasi data lama dengan default baru secara aman.
- */
 function loadDB() {
     const data = localStorage.getItem(APP_KEY);
-    const defaultDB = getDefaultDB();
-
     if (data) {
         try {
-            const parsedData = JSON.parse(data);
+            db = JSON.parse(data);
+            // Migrasi data lama jika ada penambahan properti baru (Penting!)
+            // Gunakan spread operator untuk migrasi yang lebih aman
+            const defaultDB = getDefaultDB();
+            db.dream = { ...defaultDB.dream, ...db.dream };
+            db.settings = { ...defaultDB.settings, ...db.settings };
+            db.settings.motivasi = { ...defaultDB.settings.motivasi, ...(db.settings.motivasi || {}) };
+            db.settings.notifikasi = { ...defaultDB.settings.notifikasi, ...(db.settings.notifikasi || {}) };
             
-            // #PERBAIKAN 1: Migrasi data dengan Deep Merge yang Aman
-            // Pastikan properti top-level ada, lalu gabungkan objek bertingkat
-            db.saldo = parsedData.saldo !== undefined ? parsedData.saldo : defaultDB.saldo;
-            db.transactions = Array.isArray(parsedData.transactions) ? parsedData.transactions : defaultDB.transactions;
-
-            // Gabungkan objek bertingkat (deep merge)
-            db.dream = { ...defaultDB.dream, ...(parsedData.dream || {}) };
-            
-            db.settings = { ...defaultDB.settings, ...(parsedData.settings || {}) };
-            
-            // Gabungkan objek settings bertingkat
-            db.settings.motivasi = { 
-                ...defaultDB.settings.motivasi, 
-                ...(parsedData.settings?.motivasi || {}) 
-            };
-            db.settings.notifikasi = { 
-                ...defaultDB.settings.notifikasi, 
-                ...(parsedData.settings?.notifikasi || {}) 
-            };
-            // Pastikan kategori adalah array
-            db.settings.kategori = Array.isArray(parsedData.settings?.kategori) && parsedData.settings.kategori.length > 0
-                ? parsedData.settings.kategori
-                : defaultDB.settings.kategori;
-
         } catch (e) {
             console.error("Gagal memparsing data dari localStorage:", e);
-            db = defaultDB; // Reset jika data rusak
+            db = getDefaultDB(); // Reset jika data rusak
             showToast("Data rusak, aplikasi direset.", 'error');
             saveDB();
         }
     } else {
-        db = defaultDB; 
+        db = getDefaultDB(); 
         saveDB(); 
     }
 }
@@ -144,7 +111,7 @@ function saveDB() {
 
 // --- Navigasi Halaman & Modal ---
 
-// #PERBAIKAN 2: Pastikan Semua Fungsi Akses HTML Terdaftar di 'window' (Sudah Benar)
+// #PERBAIKAN 2: Pastikan Semua Fungsi Akses HTML Terdaftar di 'window'
 window.navigateTo = function(pageId) {
     // Sembunyikan semua halaman
     document.querySelectorAll('.page').forEach(page => {
@@ -157,7 +124,7 @@ window.navigateTo = function(pageId) {
         targetPage.classList.add('active');
         window.scrollTo(0, 0);
         
-        // Panggil fungsi render spesifik (Perbaiki penamaan fungsi untuk konsistensi)
+        // Panggil fungsi render spesifik
         if (pageId === 'page-dashboard') {
             renderDashboard();
         } else if (pageId === 'page-history') {
@@ -172,17 +139,20 @@ window.navigateTo = function(pageId) {
             renderSettingsMotivasiPage();
         } else if (pageId === 'page-settings-notifikasi') {
             renderSettingsNotifikasiPage();
+        } else if (pageId === 'page-settings') {
+            // Jika halaman settings utama, tidak perlu render apa-apa
         }
+
     } else {
         console.error(`Halaman dengan ID "${pageId}" tidak ditemukan.`);
     }
 }
 
-window.showModal = function(modalId, txId = null) {
+window.showModal = function(modalId) {
     const modal = document.getElementById(modalId);
-    if (!modal) return; 
+    if (!modal) return; // Penjaga
     modal.classList.add('active');
-    
+        
     // Isi form modal dengan data yang ada
     if (modalId === 'modal-edit-dream') {
         const titleEl = document.getElementById('form-dream-title');
@@ -204,13 +174,6 @@ window.showModal = function(modalId, txId = null) {
         if (tanggalEl) tanggalEl.value = getISODate(new Date());
         
         switchTxType('pengeluaran'); // Default ke pengeluaran
-    
-    } else if (modalId === 'modal-confirm-delete' && txId) {
-        // #PERBAIKAN 5: Logic untuk Modal Konfirmasi Hapus
-        const confirmButton = document.getElementById('confirm-delete-button');
-        if (confirmButton) {
-            confirmButton.onclick = () => deleteTransaction(txId);
-        }
     }
 }
 
@@ -291,40 +254,6 @@ window.saveTransaction = function() {
     
     // Render ulang dashboard
     renderDashboard();
-    // Jika berada di page history, render juga
-    if (document.getElementById('page-history')?.classList.contains('active')) {
-        renderHistoryPage();
-    }
-}
-
-// #PERBAIKAN 4: Fungsi Hapus Transaksi
-window.deleteTransaction = function(txId) {
-    const index = db.transactions.findIndex(tx => tx.id === txId);
-
-    if (index !== -1) {
-        const txToDelete = db.transactions[index];
-        
-        // Sesuaikan saldo
-        if (txToDelete.type === 'pengeluaran') {
-            db.saldo += txToDelete.amount; // Tambahkan kembali uangnya
-        } else {
-            db.saldo -= txToDelete.amount; // Kurangi pemasukan
-        }
-
-        // Hapus transaksi dari array
-        db.transactions.splice(index, 1);
-        
-        saveDB();
-        hideModal('modal-confirm-delete');
-        showToast("Transaksi berhasil dihapus!", 'default');
-        
-        // Render ulang halaman yang sedang aktif
-        const activePageId = document.querySelector('.page.active')?.id;
-        if (activePageId) navigateTo(activePageId);
-
-    } else {
-        showToast("Transaksi tidak ditemukan.", 'error');
-    }
 }
 
 // --- ALUR 2: Halaman Histori ---
@@ -335,7 +264,7 @@ window.renderHistoryPage = function() {
     const totalInEl = document.getElementById('hist-total-in');
     const totalOutEl = document.getElementById('hist-total-out');
 
-    if (!filterEl || !listEl || !totalInEl || !totalOutEl) return; 
+    if (!filterEl || !listEl || !totalInEl || !totalOutEl) return; // Penjaga
 
     const filter = filterEl.value;
     const filteredTx = filterTransactions(db.transactions, filter);
@@ -345,7 +274,7 @@ window.renderHistoryPage = function() {
     let html = '';
 
     // Urutkan kronologis (terbaru di atas)
-    filteredTx.sort((a, b) => new Date(b.date + 'T00:00:00') - new Date(a.date + 'T00:00:00')); // Konsisten dengan penanganan tanggal
+    filteredTx.sort((a, b) => new Date(b.date) - new Date(a.date));
 
     if (filteredTx.length === 0) {
         listEl.innerHTML = '<p class="text-center text-gray-500 py-8">Tidak ada transaksi untuk periode ini.</p>';
@@ -364,16 +293,16 @@ window.renderHistoryPage = function() {
             }
             
             html += `
-                <div class="bg-white p-4 rounded-lg shadow-sm border border-gray-200 mb-2 flex justify-between items-center">
-                    <div>
-                        <p class="font-semibold text-gray-800">${tx.category}</p>
-                        <p class="text-sm text-gray-500">${noteOrDate}</p>
-                    </div>
-                    <div class="text-right flex items-center gap-3">
-                        ${amountHtml}
-                        <button onclick="showModal('modal-confirm-delete', '${tx.id}')" class="text-gray-400 hover:text-danger ml-2 p-1">
-                            <i class="fas fa-trash-alt"></i>
-                        </button>
+                <div class="bg-white p-4 rounded-lg shadow-sm border border-gray-200 mb-2">
+                    <div class="flex justify-between items-center">
+                        <div>
+                            <p class="font-semibold text-gray-800">${tx.category}</p>
+                            <p class="text-sm text-gray-500">${noteOrDate}</p>
+                        </div>
+                        <div class="text-right">
+                            ${amountHtml}
+                            <p class="text-xs text-gray-400">${secondaryDate}</p>
+                        </div>
                     </div>
                 </div>
             `;
@@ -396,7 +325,7 @@ window.renderAnalysisPage = function() {
     const sisaEl = document.getElementById('analysis-sisa');
     const chartEl = document.getElementById('analysis-chart');
 
-    if (!filterEl || !limitEl || !terpakaiEl || !sisaEl || !chartEl) return; 
+    if (!filterEl || !limitEl || !terpakaiEl || !sisaEl || !chartEl) return; // Penjaga
 
     const filter = filterEl.value;
     // Filter hanya pengeluaran
@@ -410,16 +339,7 @@ window.renderAnalysisPage = function() {
     
     limitEl.textContent = formatRupiah(limit);
     terpakaiEl.textContent = formatRupiah(terpakai);
-    
-    // Tampilkan sisa dengan warna
-    if (sisa < 0) {
-        sisaEl.className = 'font-bold text-danger';
-        sisaEl.textContent = formatRupiah(sisa);
-    } else {
-        sisaEl.className = 'font-bold text-success';
-        sisaEl.textContent = formatRupiah(sisa);
-    }
-    
+    sisaEl.textContent = formatRupiah(sisa);
 
     // 2. Visualisasi Data (Chart)
     const spendingByCategory = filteredTx.reduce((acc, tx) => {
@@ -441,7 +361,6 @@ window.renderAnalysisPage = function() {
     }
 
     if (labels.length > 0) {
-        // ... (Kode Chart.js tetap sama)
         myAnalysisChart = new Chart(ctx, {
             type: 'pie', 
             data: {
@@ -452,7 +371,7 @@ window.renderAnalysisPage = function() {
                     backgroundColor: [ 
                         '#ef4444', '#f59e0b', '#22c55e', '#3b82f6', '#8b5cf6',
                         '#ec4899', '#f97316', '#06b6d4', '#14b8a6', '#65a30d',
-                        '#64748b', '#a855f7' 
+                        '#64748b', '#a855f7' // Tambah warna
                     ],
                     hoverOffset: 4
                 }]
@@ -485,17 +404,17 @@ window.renderAnalysisPage = function() {
 
 function renderSettingsLimitPage() {
     const limitEl = document.getElementById('setting-limit-bulanan');
-    if (limitEl) { 
+    if (limitEl) { // Penjaga
         limitEl.value = db.settings.limitBulanan;
     }
 }
 
 window.saveSettingsLimit = function() {
     const limitEl = document.getElementById('setting-limit-bulanan');
-    if (!limitEl) return; 
+    if (!limitEl) return; // Penjaga
     
     const limit = parseFloat(limitEl.value);
-    if (!isNaN(limit) && limit >= 0) {  
+    if (!isNaN(limit) && limit >= 0) { 
         db.settings.limitBulanan = limit;
         saveDB();
         showToast("Limit berhasil disimpan!", 'success');
@@ -507,7 +426,7 @@ window.saveSettingsLimit = function() {
 
 function renderSettingsKategoriPage() {
     const listEl = document.getElementById('settings-kategori-list');
-    if (!listEl) return; 
+    if (!listEl) return; // Penjaga
     
     listEl.innerHTML = ''; // Kosongkan list
     db.settings.kategori.forEach((kategori, index) => {
@@ -522,28 +441,28 @@ function renderSettingsKategoriPage() {
 
 window.addCategory = function() {
     const inputEl = document.getElementById('setting-kategori-baru');
-    if (!inputEl) return; 
+    if (!inputEl) return; // Penjaga
     
     const newKategori = inputEl.value.trim();
     if (newKategori) {
-        // Cek duplikat (Case-Insensitive)
-        if (db.settings.kategori.map(k => k.toLowerCase()).includes(newKategori.toLowerCase())) {
+        // Cek duplikat
+        if (db.settings.kategori.includes(newKategori)) {
             return showToast("Kategori sudah ada!", 'error');
         }
         
         db.settings.kategori.push(newKategori);
         saveDB();
-        renderSettingsKategoriPage(); 
-        populateCategorySelects(); 
-        inputEl.value = ''; 
+        renderSettingsKategoriPage(); // Render ulang list
+        populateCategorySelects(); // Update juga dropdown di form
+        inputEl.value = ''; // Kosongkan input
         showToast("Kategori ditambahkan!", 'success');
     }
 }
 
 window.deleteCategory = function(index) {
-    if (index < 0 || index >= db.settings.kategori.length) return; 
+    if (index < 0 || index >= db.settings.kategori.length) return; // Penjaga
     
-    // Cegah penghapusan jika hanya ada 1 kategori tersisa
+    // Cegah penghapusan jika hanya ada 1 kategori tersisa (opsional)
     if (db.settings.kategori.length <= 1) {
         return showToast("Minimal harus ada satu kategori.", 'error');
     }
@@ -552,9 +471,9 @@ window.deleteCategory = function(index) {
     
     db.settings.kategori.splice(index, 1);
     saveDB();
-    renderSettingsKategoriPage(); 
-    populateCategorySelects(); 
-    showToast(`Kategori "${kategori}" dihapus.`, 'default'); 
+    renderSettingsKategoriPage(); // Render ulang list
+    populateCategorySelects(); // Update juga dropdown di form
+    showToast(`Kategori "${kategori}" dihapus.`, 'default'); // Ubah ke default/success
 }
 
 function renderSettingsMotivasiPage() {
@@ -568,7 +487,7 @@ window.saveSettingsMotivasi = function() {
     const kuningEl = document.getElementById('setting-motivasi-kuning');
     const merahEl = document.getElementById('setting-motivasi-merah');
     
-    if (!kuningEl || !merahEl) return; 
+    if (!kuningEl || !merahEl) return; // Penjaga
     
     db.settings.motivasi.kuning = kuningEl.value.trim();
     db.settings.motivasi.merah = merahEl.value.trim();
@@ -588,7 +507,7 @@ window.saveSettingsNotifikasi = function() {
     const aktifEl = document.getElementById('setting-notif-aktif');
     const waktuEl = document.getElementById('setting-notif-waktu');
 
-    if (!aktifEl || !waktuEl) return; 
+    if (!aktifEl || !waktuEl) return; // Penjaga
 
     db.settings.notifikasi.aktif = aktifEl.checked;
     db.settings.notifikasi.waktu = waktuEl.value;
@@ -632,12 +551,6 @@ window.saveDream = function() {
     // 2. Validasi
     if (!title || !targetAmount || isNaN(targetAmount) || targetAmount < 0 || !targetDate) {
         return showToast("Semua field impian harus diisi, dan target nominal harus angka valid (>=0)", 'error');
-    }
-    
-    // Validasi Tanggal: Pastikan tanggal target tidak di masa lalu (opsional)
-    const todayISO = getISODate(new Date());
-    if (targetDate < todayISO) {
-        // return showToast("Tanggal target tidak boleh di masa lalu.", 'error');
     }
 
     // 3. Update database
@@ -683,8 +596,7 @@ function renderDashboard() {
     
     if (dashDreamTitleEl) dashDreamTitleEl.textContent = title;
     if (dashDreamTargetAmountEl) dashDreamTargetAmountEl.textContent = formatRupiah(targetAmount);
-    // #PERBAIKAN 6: Menggunakan format Date yang lebih baik di Dashboard
-    if (dashDreamTargetDateEl) dashDreamTargetDateEl.textContent = formatDate(targetDate, { day: 'numeric', month: 'short', year: 'numeric' });
+    if (dashDreamTargetDateEl) dashDreamTargetDateEl.textContent = formatDate(targetDate, { month: 'short', year: 'numeric' });
     if (dashDreamProgressEl) dashDreamProgressEl.style.width = `${progressPercent}%`;
     if (dashDreamProgressPercentEl) dashDreamProgressPercentEl.textContent = `${progressPercent.toFixed(1)}%`;
     
@@ -707,15 +619,15 @@ function renderDashboard() {
             indicatorEl.className = 'px-3 py-1 rounded-full text-sm font-semibold text-white bg-gray-400';
             indicatorEl.textContent = '...';
             warningEl.textContent = 'Atur limit budget Anda di Pengaturan.';
-        } else if (sisaPercent >= 40) { // Hijau (> 40% sisa)
+        } else if (sisaPercent > 40) { // Hijau
             indicatorEl.className = 'px-3 py-1 rounded-full text-sm font-semibold text-white bg-success';
             indicatorEl.textContent = 'Aman';
             warningEl.textContent = '';
-        } else if (sisaPercent > 10) { // Kuning (10% - 40% sisa)
+        } else if (sisaPercent > 10) { // Kuning
             indicatorEl.className = 'px-3 py-1 rounded-full text-sm font-semibold text-white bg-warning';
             indicatorEl.textContent = 'Hati-hati';
             warningEl.textContent = db.settings.motivasi.kuning;
-        } else { // Merah (<= 10% sisa atau sudah minus)
+        } else { // Merah
             indicatorEl.className = 'px-3 py-1 rounded-full text-sm font-semibold text-white bg-danger';
             indicatorEl.textContent = 'Bahaya';
             warningEl.textContent = db.settings.motivasi.merah;
@@ -723,32 +635,23 @@ function renderDashboard() {
     }
     
     // 4. Render Histori Singkat
-    if (listEl) { 
-        // Menggunakan getISODate(new Date()) untuk mendapatkan 'today' secara konsisten
-        const todayISO = getISODate(new Date()); 
-        // Ambil transaksi hari ini dan urutkan (terbaru di atas)
-        const recentTx = db.transactions
-            .filter(tx => tx.date === todayISO)
-            .sort((a, b) => new Date(b.id) - new Date(a.id)); // Urutkan berdasarkan ID (timestamp)
-
+    if (listEl) { // Penjaga
+        const recentTx = [...db.transactions].sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 5); // Ambil 5 terbaru
         
         if (recentTx.length === 0) {
-            listEl.innerHTML = '<p class="text-center text-gray-500 py-4">Belum ada transaksi hari ini.</p>';
+            listEl.innerHTML = '<p class="text-center text-gray-500 py-4">Belum ada transaksi.</p>';
         } else {
             let html = '';
-            // Hanya tampilkan 5 transaksi terbaru hari ini
-            recentTx.slice(0, 5).forEach(tx => {
+            recentTx.forEach(tx => {
                 const amountHtml = tx.type === 'pemasukan'
                     ? `<span class="font-bold text-success">+${formatRupiah(tx.amount)}</span>`
                     : `<span class="font-bold text-danger">-${formatRupiah(tx.amount)}</span>`;
-                    
-                const noteDisplay = tx.note.substring(0, 30) + (tx.note.length > 30 ? '...' : '');
                     
                 html += `
                     <div class="flex justify-between items-center bg-white p-4 rounded-xl shadow-sm mb-2">
                         <div>
                             <p class="font-semibold text-gray-800">${tx.category}</p>
-                            <p class="text-sm text-gray-500">${noteDisplay || 'Tanpa catatan'}</p>
+                            <p class="text-sm text-gray-500">${formatDate(tx.date)}</p>
                         </div>
                         ${amountHtml}
                     </div>
@@ -771,17 +674,10 @@ function formatRupiah(number) {
     }).format(number);
 }
 
-/**
- * Mengubah string tanggal YYYY-MM-DD menjadi format yang lebih mudah dibaca.
- * @param {string} dateString - Tanggal dalam format YYYY-MM-DD.
- * @param {object} options - Opsi format Intl.DateTimeFormat.
- * @returns {string} Tanggal yang diformat.
- */
 function formatDate(dateString, options = { day: 'numeric', month: 'short', year: 'numeric' }) {
     try {
         // #PERBAIKAN 3: Penanganan Timezone
-        // Membuat objek Date dengan offset 00:00:00 (UTC) agar konsisten 
-        // dengan date string YYYY-MM-DD (menghindari pergeseran tanggal karena timezone lokal)
+        // Membuat objek Date dengan offset 00:00:00 untuk menghindari masalah timezone
         const date = new Date(dateString + 'T00:00:00'); 
         return new Intl.DateTimeFormat('id-ID', options).format(date);
     } catch (e) {
@@ -792,7 +688,7 @@ function formatDate(dateString, options = { day: 'numeric', month: 'short', year
 function populateCategorySelects() {
     const selectEl = document.getElementById('form-tx-kategori');
     if (!selectEl) return; 
-    selectEl.innerHTML = ''; 
+    selectEl.innerHTML = ''; // Kosongkan
     db.settings.kategori.forEach(kategori => {
         const option = document.createElement('option');
         option.value = kategori;
@@ -803,35 +699,36 @@ function populateCategorySelects() {
 
 function filterTransactions(transactions, filter) {
     const now = new Date();
-    // #PERBAIKAN 7: Perbaikan Logika Filter Tanggal
-    // Menggunakan Date Object untuk perbandingan agar lebih akurat
-    const getTargetDate = (dateString) => new Date(dateString + 'T00:00:00'); 
+    const today = getISODate(now); 
     
-    // Menghitung batas waktu
-    const startOfToday = getTargetDate(getISODate(now));
-    const startOfMonth = getTargetDate(getISODate(new Date(now.getFullYear(), now.getMonth(), 1)));
-    const startOfYear = getTargetDate(getISODate(new Date(now.getFullYear(), 0, 1)));
-    
-    // Logika start of week: Hari pertama adalah Senin (1), bukan Minggu (0)
-    // Disesuaikan untuk konvensi Indonesia/Asia Tenggara, jika Minggu diinginkan ganti (now.getDay())
-    let dayOfWeek = now.getDay();
-    dayOfWeek = (dayOfWeek === 0) ? 6 : dayOfWeek - 1; // Ubah Minggu (0) ke 6, Senin (1) ke 0, dst.
-    const startOfWeek = getTargetDate(getISODate(new Date(now.getFullYear(), now.getMonth(), now.getDate() - dayOfWeek)));
+    const year = now.getFullYear();
+    const month = now.getMonth();
+    const day = now.getDate();
+    const dayOfWeek = now.getDay(); // 0 = Minggu, 1 = Senin, ..., 6 = Sabtu
 
+    // Awal minggu ini (Minggu)
+    // Menggunakan T00:00:00 untuk konsistensi tanggal
+    const firstDayOfWeek = new Date(year, month, day - dayOfWeek);
+    const startOfWeek = getISODate(firstDayOfWeek);
+    
+    // Awal bulan ini
+    const startOfMonth = getISODate(new Date(year, month, 1));
+    
+    // Awal tahun ini
+    const startOfYear = getISODate(new Date(year, 0, 1));
     
     // Filter
     return transactions.filter(tx => {
-        const txDate = getTargetDate(tx.date); // Objek Date dari transaksi
-        
         switch (filter) {
             case 'today':
-                return txDate.getTime() === startOfToday.getTime();
+                return tx.date === today;
             case 'week':
-                return txDate >= startOfWeek && txDate <= startOfToday;
+                // Perbandingan string YYYY-MM-DD bekerja dengan baik untuk tanggal
+                return tx.date >= startOfWeek && tx.date <= today;
             case 'month':
-                return txDate >= startOfMonth && txDate <= startOfToday;
+                return tx.date >= startOfMonth && tx.date <= today;
             case 'year':
-                return txDate >= startOfYear && txDate <= startOfToday;
+                return tx.date >= startOfYear && tx.date <= today;
             case 'all':
             default:
                 return true;
@@ -839,10 +736,9 @@ function filterTransactions(transactions, filter) {
     });
 }
 
-// (Fungsi showToast tidak diubah, sudah benar)
 function showToast(message, type = 'default') {
     const toast = document.getElementById('toast');
-    if (!toast) return; 
+    if (!toast) return; // Penjaga
     toast.textContent = message;
     
     // Atur warna berdasarkan tipe
@@ -860,6 +756,3 @@ function showToast(message, type = 'default') {
         toast.classList.remove('show');
     }, 3000); // Sembunyikan setelah 3 detik
 }
-
-// Tambahkan deklarasi untuk fungsi yang dipanggil dari HTML yang tidak memiliki 'window.'
-window.deleteTransaction = window.deleteTransaction;

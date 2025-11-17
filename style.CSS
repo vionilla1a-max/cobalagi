@@ -1,0 +1,53 @@
+body {
+    font-family: 'Inter', sans-serif;
+    overscroll-behavior: none;
+}
+
+/* Menyembunyikan halaman dan modal secara default */
+.page, .modal-overlay {
+    display: none;
+}
+
+/* Menampilkan halaman atau modal yang aktif */
+.page.active, .modal-overlay.active {
+    display: block;
+}
+
+/* Styling untuk modal bottom sheet */
+.modal-content {
+    animation: slideUp 0.3s ease-out;
+}
+
+@keyframes slideUp {
+    from { transform: translateY(100%); }
+    to { transform: translateY(0); }
+}
+
+/* Styling untuk toast notification */
+#toast {
+    visibility: hidden;
+    min-width: 250px;
+    margin-left: -125px;
+    background-color: #333;
+    color: #fff;
+    text-align: center;
+    border-radius: 8px;
+    padding: 16px;
+    position: fixed;
+    z-index: 100;
+    left: 50%;
+    bottom: 30px;
+    font-size: 17px;
+    opacity: 0;
+    transition: opacity 0.3s, visibility 0.3s, bottom 0.3s;
+}
+
+#toast.show {
+    visibility: visible;
+    opacity: 1;
+    bottom: 50px;
+}
+
+/* * KELAS HELPER DIHAPUS DARI SINI DAN DIPINDAHKAN LANGSUNG KE ELEMEN HTML 
+ * untuk memaksa peramban me-render ulang dan menghindari masalah cache.
+ */

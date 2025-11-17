@@ -1,40 +1,74 @@
+/* ====================================================== */
+/* 1. BODY & FONT */
+/* ====================================================== */
 body {
     font-family: 'Inter', sans-serif;
-    /* overscroll-behavior: none; sebaiknya dihindari jika tidak perlu */
+    /* overscroll-behavior: none; tetap ada jika memang diperlukan */
+    overscroll-behavior: none;
 }
 
-/* ⚠️ Halaman harus ditempatkan di dalam container fixed atau absolute 
-   jika ingin transisi page to page, tapi untuk default: */
+/* ====================================================== */
+/* 2. PAGE & MODAL OVERLAY (Menggunakan Opacity & Visibility) */
+/* ====================================================== */
 
 /* Menyembunyikan halaman dan modal secara default */
 .page, .modal-overlay {
-    display: none;
-    /* Tambahkan properti ini untuk mengelola transisi halaman di JS */
-    /* position: absolute; top: 0; left: 0; width: 100%; */
+    /* Gunakan fixed/absolute position agar bisa ditumpuk */
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 10;
+    
+    /* Perbaikan: Sembunyikan dengan visibility dan opacity */
+    visibility: hidden;
+    opacity: 0;
+    
+    /* Tambahkan transisi untuk animasi yang mulus saat muncul/hilang */
+    transition: opacity 0.3s ease-in-out, visibility 0.3s;
 }
 
 /* Menampilkan halaman atau modal yang aktif */
 .page.active, .modal-overlay.active {
-    display: block;
+    visibility: visible;
+    opacity: 1;
+    /* Pastikan tampil di atas yang lain */
+    z-index: 20; 
 }
 
 /* ====================================================== */
-/* Styling untuk modal bottom sheet */
+/* 3. MODAL BOTTOM SHEET (Akselerasi GPU) */
 /* ====================================================== */
 .modal-content {
-    /* Pastikan posisi fixed agar modal selalu terlihat */
     position: fixed;
     bottom: 0;
     left: 0;
     right: 0;
-    z-index: 50; /* Z-index harus di atas overlay (z-40) */
+    z-index: 50; /* Z-index harus di atas overlay (z-20) */
     
     /* Gunakan transisi 3D untuk akselerasi GPU (Perbaikan Utama) */
-    animation: slideUp 0.3s ease-out;
+    /* Saat modal muncul, ia akan slideUp dari 100% */
+    animation: slideUp 0.3s ease-out forwards; 
+    
+    /* Sembunyikan default (di luar layar) */
+    -webkit-transform: translateY(100%);
+    transform: translateY(100%);
+    
+    /* Tambahkan transisi agar saat ditutup (jika menggunakan JS) juga mulus */
+    -webkit-transition: transform 0.3s ease-out;
+    transition: transform 0.3s ease-out;
 }
 
+/* Tambahkan kelas aktif untuk memicu animasi ke atas */
+/* Anda perlu menambahkan kelas ini (misalnya: modal-content.open) di JS */
+.modal-overlay.active .modal-content {
+    -webkit-transform: translateY(0);
+    transform: translateY(0);
+}
+
+/* Keyframes hanya untuk memastikan animasi awal berjalan lancar */
 @keyframes slideUp {
-    /* Perbaikan: Menggunakan translate3d untuk akselerasi GPU */
     from { 
         -webkit-transform: translateY(100%); 
         transform: translateY(100%); 
@@ -47,7 +81,7 @@ body {
 
 
 /* ====================================================== */
-/* Styling untuk toast notification */
+/* 4. TOAST NOTIFICATION */
 /* ====================================================== */
 #toast {
     visibility: hidden;
@@ -64,7 +98,8 @@ body {
     bottom: 30px;
     font-size: 17px;
     opacity: 0;
-    /* Perbaikan: Tambahkan prefiks vendor untuk transisi */
+    
+    /* Pastikan prefiks vendor ada */
     -webkit-transition: opacity 0.3s, visibility 0.3s, bottom 0.3s;
     transition: opacity 0.3s, visibility 0.3s, bottom 0.3s;
 }

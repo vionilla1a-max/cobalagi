@@ -1,11 +1,16 @@
 body {
     font-family: 'Inter', sans-serif;
-    overscroll-behavior: none;
+    /* overscroll-behavior: none; sebaiknya dihindari jika tidak perlu */
 }
+
+/* ⚠️ Halaman harus ditempatkan di dalam container fixed atau absolute 
+   jika ingin transisi page to page, tapi untuk default: */
 
 /* Menyembunyikan halaman dan modal secara default */
 .page, .modal-overlay {
     display: none;
+    /* Tambahkan properti ini untuk mengelola transisi halaman di JS */
+    /* position: absolute; top: 0; left: 0; width: 100%; */
 }
 
 /* Menampilkan halaman atau modal yang aktif */
@@ -13,17 +18,37 @@ body {
     display: block;
 }
 
+/* ====================================================== */
 /* Styling untuk modal bottom sheet */
+/* ====================================================== */
 .modal-content {
+    /* Pastikan posisi fixed agar modal selalu terlihat */
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 50; /* Z-index harus di atas overlay (z-40) */
+    
+    /* Gunakan transisi 3D untuk akselerasi GPU (Perbaikan Utama) */
     animation: slideUp 0.3s ease-out;
 }
 
 @keyframes slideUp {
-    from { transform: translateY(100%); }
-    to { transform: translateY(0); }
+    /* Perbaikan: Menggunakan translate3d untuk akselerasi GPU */
+    from { 
+        -webkit-transform: translateY(100%); 
+        transform: translateY(100%); 
+    }
+    to { 
+        -webkit-transform: translateY(0); 
+        transform: translateY(0); 
+    }
 }
 
+
+/* ====================================================== */
 /* Styling untuk toast notification */
+/* ====================================================== */
 #toast {
     visibility: hidden;
     min-width: 250px;
@@ -39,6 +64,8 @@ body {
     bottom: 30px;
     font-size: 17px;
     opacity: 0;
+    /* Perbaikan: Tambahkan prefiks vendor untuk transisi */
+    -webkit-transition: opacity 0.3s, visibility 0.3s, bottom 0.3s;
     transition: opacity 0.3s, visibility 0.3s, bottom 0.3s;
 }
 
@@ -47,7 +74,3 @@ body {
     opacity: 1;
     bottom: 50px;
 }
-
-/* * KELAS HELPER DIHAPUS DARI SINI DAN DIPINDAHKAN LANGSUNG KE ELEMEN HTML 
- * untuk memaksa peramban me-render ulang dan menghindari masalah cache.
- */
